@@ -52,10 +52,10 @@ import java.io.ByteArrayOutputStream
 fun ShowAppList() {
     val context = LocalContext.current
     val appsList = remember { mutableStateOf<List<InstalledApps>>(emptyList()) }
-    val isLoading = remember { mutableStateOf(true) } // Loading state
-    val showToast = remember { mutableStateOf(false) } // State for showing toast
+    val isLoading = remember { mutableStateOf(true) }
+    val showToast = remember { mutableStateOf(false) }
 
-    // Listen for changes in Firebase and update the list
+
     DisposableEffect(Unit) {
         val firebaseDatabase = FirebaseDatabase.getInstance().reference.child("Apps")
 
@@ -70,7 +70,6 @@ fun ShowAppList() {
                     val interval = childSnapshot.child("interval").getValue(String::class.java) ?: ""
                     val pinCode = childSnapshot.child("pin_code").getValue(String::class.java) ?: ""
 
-                    // Convert Base64 string to Bitmap
                     val iconBitmap = base64ToBitmap(base64Icon)
 
                     val installedApp = InstalledApps(
@@ -83,11 +82,11 @@ fun ShowAppList() {
                     updatedList.add(installedApp)
                 }
                 appsList.value = updatedList
-                isLoading.value = false // Data fetched, stop loading
+                isLoading.value = false
             }
 
             override fun onCancelled(databaseError: DatabaseError) {
-                isLoading.value = false // Stop loading on error
+                isLoading.value = false
             }
         }
 
@@ -97,10 +96,10 @@ fun ShowAppList() {
         }
     }
 
-    // Show toast when upload is successful
+
     if (showToast.value) {
         Toast.makeText(context, "Data sent successfully", Toast.LENGTH_SHORT).show()
-        showToast.value = false // Reset toast state after displaying it
+        showToast.value = false
     }
 
     Scaffold(
@@ -119,10 +118,9 @@ fun ShowAppList() {
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues),
-                contentAlignment = Alignment.Center // Center the loader or content
+                contentAlignment = Alignment.Center
             ) {
                 if (isLoading.value) {
-                    // Show loading spinner
                     CircularProgressIndicator()
                 } else {
                     Column(
@@ -131,7 +129,7 @@ fun ShowAppList() {
                         // List of apps
                         LazyColumn(
                             modifier = Modifier
-                                .weight(1f) // This makes the list take up all available space above the button
+                                .weight(1f)
                                 .fillMaxWidth()
                         ) {
                             items(appsList.value) { app ->
@@ -143,24 +141,24 @@ fun ShowAppList() {
                             }
                         }
 
-                        // Submit Button at the bottom
+
                         Button(
                             onClick = {
-                                uploadToFirebase(appsList.value) // Upload the list to a different Firebase node
-                                showToast.value = true // Show toast on successful upload
+                                uploadToFirebase(appsList.value)
+                                showToast.value = true
                             },
                             modifier = Modifier
-                                .fillMaxWidth() // Full width
-                                .height(60.dp), // Height of 60 dp
+                                .fillMaxWidth()
+                                .height(60.dp),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = Color.Green // Green background
+                                containerColor = Color.Green
                             ),
-                            shape = RectangleShape // Removes the rounded corners
+                            shape = RectangleShape
                         ) {
                             Text(
                                 text = "Submit",
                                 style = MaterialTheme.typography.bodyLarge,
-                                color = Color.White // White text color
+                                color = Color.White
                             )
                         }
                     }
