@@ -4,6 +4,7 @@ import android.util.Base64
 import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -55,7 +56,6 @@ fun ShowAppList() {
     val isLoading = remember { mutableStateOf(true) }
     val showToast = remember { mutableStateOf(false) }
 
-
     DisposableEffect(Unit) {
         val firebaseDatabase = FirebaseDatabase.getInstance().reference.child("Apps")
 
@@ -96,7 +96,6 @@ fun ShowAppList() {
         }
     }
 
-
     if (showToast.value) {
         Toast.makeText(context, "Data sent successfully", Toast.LENGTH_SHORT).show()
         showToast.value = false
@@ -123,43 +122,53 @@ fun ShowAppList() {
                 if (isLoading.value) {
                     CircularProgressIndicator()
                 } else {
-                    Column(
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        // List of apps
-                        LazyColumn(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxWidth()
+                    if (appsList.value.isEmpty()) {
+                        // Show this text if the list is empty
+                        Text(
+                            text = "No apps added yet",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = if (isSystemInDarkTheme()) Color.White else Color.Black,
+                            modifier = Modifier.align(Alignment.Center)
+                        )
+                    } else {
+                        Column(
+                            modifier = Modifier.fillMaxSize()
                         ) {
-                            items(appsList.value) { app ->
-                                AppListItem(
-                                    app = app,
-                                    interval = app.interval,
-                                    pinCode = app.pinCode
+                            // List of apps
+                            LazyColumn(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxWidth()
+                            ) {
+                                items(appsList.value) { app ->
+                                    AppListItem(
+                                        app = app,
+                                        interval = app.interval,
+                                        pinCode = app.pinCode
+                                    )
+                                }
+                            }
+
+                            // Submit button
+                            Button(
+                                onClick = {
+                                    uploadToFirebase(appsList.value)
+                                    showToast.value = true
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(60.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFF3F51B5)
+                                ),
+                                shape = RectangleShape
+                            ) {
+                                Text(
+                                    text = "Submit",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = Color.White
                                 )
                             }
-                        }
-
-
-                        Button(
-                            onClick = {
-                                uploadToFirebase(appsList.value)
-                                showToast.value = true
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(60.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color.Green
-                            ),
-                            shape = RectangleShape
-                        ) {
-                            Text(
-                                text = "Submit",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = Color.White
-                            )
                         }
                     }
                 }
@@ -167,6 +176,7 @@ fun ShowAppList() {
         }
     )
 }
+
 
 @Composable
 fun AppListItem(app: InstalledApps, interval: String, pinCode: String) {
@@ -232,7 +242,7 @@ data class InstalledApps(
     val pinCode: String
 )
 
-// Function to convert Base64 to Bitmap
+
 fun base64ToBitmap(base64Str: String): Bitmap {
     val decodedBytes = Base64.decode(base64Str, Base64.DEFAULT)
     return BitmapFactory.decodeByteArray(decodedBytes, 0, decodedBytes.size)
@@ -244,12 +254,11 @@ fun uploadToFirebase(appsList: List<InstalledApps>) {
     appsList.forEach { app ->
         val appData = mapOf(
             "package_name" to app.packageName,
-            "icon" to bitmapToBase64(app.icon), // Convert the bitmap back to Base64
+            "icon" to bitmapToBase64(app.icon),
             "interval" to app.interval,
             "pin_code" to app.pinCode
         )
 
-        // Store data under childApp/{appname}
         firebaseDatabase.child(app.name).setValue(appData)
     }
 }
