@@ -1,5 +1,3 @@
-
-
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Base64
@@ -8,42 +6,18 @@ import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -63,6 +37,7 @@ fun ShowAppList() {
     val selectedApps = remember { mutableStateOf<MutableSet<InstalledApps>>(mutableSetOf()) }
     val showToast = remember { mutableStateOf(false) }
 
+    // Firebase listener to fetch and update the app list in real-time
     DisposableEffect(Unit) {
         val firebaseDatabase = FirebaseDatabase.getInstance().reference.child("Apps")
 
@@ -77,8 +52,6 @@ fun ShowAppList() {
                     val interval = childSnapshot.child("interval").getValue(String::class.java) ?: ""
                     val pinCode = childSnapshot.child("pin_code").getValue(String::class.java) ?: ""
                     val isIconVisible = childSnapshot.child("isIconVisible").getValue(Boolean::class.java) ?: false
-
-                    Log.d("FirebaseData", "App: $name, isIconVisible: $isIconVisible")
 
                     val iconBitmap = base64ToBitmap(base64Icon)
 
@@ -146,13 +119,11 @@ fun ShowAppList() {
                                 pinCode = app.pinCode,
                                 isSelected = isSelected,
                                 onClick = {
-                                    // Update the selected apps state
                                     if (isSelected) {
                                         selectedApps.value.remove(app)
                                     } else {
                                         selectedApps.value.add(app)
                                     }
-                                    // Trigger recomposition for the selected item
                                     selectedApps.value = selectedApps.value.toSet().toMutableSet()
                                 }
                             )
@@ -163,14 +134,14 @@ fun ShowAppList() {
                     Button(
                         onClick = {
                             // Toggle visibility for selected apps before uploading
-                            toggleIconVisibility(selectedApps.value.toList())
+                            toggleIconVisibility(selectedApps.value.toList(), appsList)
                             uploadToFirebase(selectedApps.value.toList())
                             showToast.value = true
                         },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(65.dp) // Set the height to 65 dp
-                            .padding(12.dp), // Add padding around the button
+                            .height(65.dp)
+                            .padding(12.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Color(0xFF3F51B5)
                         ),
@@ -264,8 +235,6 @@ fun AppListItem(
     }
 }
 
-
-
 // Function to upload data to Firebase
 fun uploadToFirebase(appsList: List<InstalledApps>) {
     val firebaseDatabase = FirebaseDatabase.getInstance().reference.child("childApps")
@@ -283,8 +252,8 @@ fun uploadToFirebase(appsList: List<InstalledApps>) {
     }
 }
 
-// Function to toggle isIconVisible for selected apps
-fun toggleIconVisibility(appsList: List<InstalledApps>) {
+// Function to toggle isIconVisible for selected apps and update locally
+fun toggleIconVisibility(appsList: List<InstalledApps>, appsListState: MutableState<List<InstalledApps>>) {
     val firebaseDatabase = FirebaseDatabase.getInstance().reference
 
     appsList.forEach { app ->
@@ -296,6 +265,16 @@ fun toggleIconVisibility(appsList: List<InstalledApps>) {
 
         // Update the visibility in Firebase
         firebaseDatabase.child("Apps").child(app.name.toLowerCase()).updateChildren(appData)
+
+        // Update the local app list to reflect the new visibility state
+        val updatedAppsList = appsListState.value.map {
+            if (it.packageName == app.packageName) {
+                it.copy(isIconVisible = newVisibility)
+            } else {
+                it
+            }
+        }
+        appsListState.value = updatedAppsList // This will trigger recomposition
     }
 }
 
@@ -307,6 +286,7 @@ fun bitmapToBase64(bitmap: Bitmap): String {
     return Base64.encodeToString(byteArray, Base64.DEFAULT)
 }
 
+// Function to convert Base64 to Bitmap
 fun base64ToBitmap(base64Str: String): Bitmap {
     val decodedBytes = Base64.decode(base64Str, Base64.DEFAULT)
     return BitmapFactory.decodeByteArray(decodedBytes, 0, decodedBytes.size)
@@ -319,12 +299,4 @@ data class InstalledApps(
     val interval: String,
     val pinCode: String,
     val isIconVisible: Boolean
-) {
-    override fun equals(other: Any?): Boolean {
-        return other is InstalledApps && this.packageName == other.packageName
-    }
-
-    override fun hashCode(): Int {
-        return packageName.hashCode()
-    }
-}
+)
