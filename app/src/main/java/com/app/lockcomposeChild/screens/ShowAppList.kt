@@ -1,6 +1,9 @@
+
+
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Base64
+import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
@@ -75,6 +78,8 @@ fun ShowAppList() {
                     val pinCode = childSnapshot.child("pin_code").getValue(String::class.java) ?: ""
                     val isIconVisible = childSnapshot.child("isIconVisible").getValue(Boolean::class.java) ?: false
 
+                    Log.d("FirebaseData", "App: $name, isIconVisible: $isIconVisible")
+
                     val iconBitmap = base64ToBitmap(base64Icon)
 
                     val installedApp = InstalledApps(
@@ -83,7 +88,7 @@ fun ShowAppList() {
                         icon = iconBitmap,
                         interval = interval,
                         pinCode = pinCode,
-                        isIconVisible = isIconVisible // Add the fetched value here
+                        isIconVisible = isIconVisible
                     )
                     updatedList.add(installedApp)
                 }
@@ -91,8 +96,8 @@ fun ShowAppList() {
                 isLoading.value = false
             }
 
-            override fun onCancelled(databaseError: DatabaseError) {
-                isLoading.value = false
+            override fun onCancelled(error: DatabaseError) {
+                // Handle error
             }
         }
 
@@ -166,8 +171,8 @@ fun ShowAppList() {
                             // Submit button
                             Button(
                                 onClick = {
-                                    // Update isIconVisible to true for selected apps before uploading
-                                    updateIconVisibility(selectedApps.value.toList(), true)
+                                    // Toggle visibility for selected apps before uploading
+                                    toggleIconVisibility(selectedApps.value.toList())
                                     uploadToFirebase(selectedApps.value.toList())
                                     showToast.value = true
                                 },
@@ -224,8 +229,8 @@ fun AppListItem(
             Row(
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Check if the icon is visible
-                if (!app.isIconVisible) { // Show the icon when isIconVisible is false
+                // Only show the icon if isIconVisible is true
+                if (app.isIconVisible) {
                     Image(
                         bitmap = app.icon.asImageBitmap(),
                         contentDescription = app.name,
@@ -235,7 +240,10 @@ fun AppListItem(
                             .border(2.dp, MaterialTheme.colorScheme.primary, CircleShape)
                     )
                     Spacer(modifier = Modifier.width(16.dp))
+                } else {
+                    Spacer(modifier = Modifier.size(64.dp)) // Spacer to maintain layout
                 }
+
                 Text(
                     text = app.name,
                     style = MaterialTheme.typography.bodyLarge,
@@ -266,32 +274,9 @@ fun AppListItem(
     }
 }
 
-
-data class InstalledApps(
-    val packageName: String,
-    val name: String,
-    val icon: Bitmap,
-    val interval: String,
-    val pinCode: String,
-    val isIconVisible: Boolean // Added this property
-) {
-    override fun equals(other: Any?): Boolean {
-        return other is InstalledApps && this.packageName == other.packageName
-    }
-
-    override fun hashCode(): Int {
-        return packageName.hashCode()
-    }
-}
-
-fun base64ToBitmap(base64Str: String): Bitmap {
-    val decodedBytes = Base64.decode(base64Str, Base64.DEFAULT)
-    return BitmapFactory.decodeByteArray(decodedBytes, 0, decodedBytes.size)
-}
-
 // Function to upload data to Firebase
 fun uploadToFirebase(appsList: List<InstalledApps>) {
-    val firebaseDatabase = FirebaseDatabase.getInstance().reference.child("childApps") // Change to the correct path
+    val firebaseDatabase = FirebaseDatabase.getInstance().reference.child("childApps")
 
     appsList.forEach { app ->
         val appData = mapOf(
@@ -299,23 +284,25 @@ fun uploadToFirebase(appsList: List<InstalledApps>) {
             "icon" to bitmapToBase64(app.icon),
             "interval" to app.interval,
             "pin_code" to app.pinCode,
-            "isIconVisible" to app.isIconVisible // Ensure this is included in the upload
+            "isIconVisible" to app.isIconVisible
         )
 
-        firebaseDatabase.child(app.name).setValue(appData) // Updated to use packageName
+        firebaseDatabase.child(app.name).setValue(appData)
     }
 }
 
-// Function to update isIconVisible for selected apps
-fun updateIconVisibility(appsList: List<InstalledApps>, isVisible: Boolean) {
+// Function to toggle isIconVisible for selected apps
+fun toggleIconVisibility(appsList: List<InstalledApps>) {
     val firebaseDatabase = FirebaseDatabase.getInstance().reference
 
     appsList.forEach { app ->
+        val newVisibility = !app.isIconVisible  // Toggle visibility
+
         val appData = mapOf(
-            "isIconVisible" to isVisible
+            "isIconVisible" to newVisibility
         )
 
-        // Navigate to the correct path: app.name/Apps and update the visibility
+        // Update the visibility in Firebase
         firebaseDatabase.child("Apps").child(app.name.toLowerCase()).updateChildren(appData)
     }
 }
@@ -326,4 +313,26 @@ fun bitmapToBase64(bitmap: Bitmap): String {
     bitmap.compress(Bitmap.CompressFormat.PNG, 100, byteArrayOutputStream)
     val byteArray = byteArrayOutputStream.toByteArray()
     return Base64.encodeToString(byteArray, Base64.DEFAULT)
+}
+
+fun base64ToBitmap(base64Str: String): Bitmap {
+    val decodedBytes = Base64.decode(base64Str, Base64.DEFAULT)
+    return BitmapFactory.decodeByteArray(decodedBytes, 0, decodedBytes.size)
+}
+
+data class InstalledApps(
+    val packageName: String,
+    val name: String,
+    val icon: Bitmap,
+    val interval: String,
+    val pinCode: String,
+    val isIconVisible: Boolean
+) {
+    override fun equals(other: Any?): Boolean {
+        return other is InstalledApps && this.packageName == other.packageName
+    }
+
+    override fun hashCode(): Int {
+        return packageName.hashCode()
+    }
 }
