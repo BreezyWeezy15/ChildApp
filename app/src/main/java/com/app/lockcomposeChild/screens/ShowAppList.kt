@@ -32,9 +32,10 @@ import java.io.ByteArrayOutputStream
 @Composable
 fun ShowAppList() {
     val context = LocalContext.current
+    // Use mutableStateOf with a list to avoid type mismatch
     val appsList = remember { mutableStateOf<List<InstalledApps>>(emptyList()) }
     val isLoading = remember { mutableStateOf(true) }
-    val selectedApps = remember { mutableStateOf<MutableSet<InstalledApps>>(mutableSetOf()) }
+    val selectedApps = remember { mutableStateOf<Set<InstalledApps>>(emptySet()) }
     val showToast = remember { mutableStateOf(false) }
 
     // Firebase listener to fetch and update the app list in real-time
@@ -65,7 +66,7 @@ fun ShowAppList() {
                     )
                     updatedList.add(installedApp)
                 }
-                appsList.value = updatedList
+                appsList.value = updatedList // Update the list of apps
                 isLoading.value = false
             }
 
@@ -120,11 +121,10 @@ fun ShowAppList() {
                                 isSelected = isSelected,
                                 onClick = {
                                     if (isSelected) {
-                                        selectedApps.value.remove(app)
+                                        selectedApps.value = selectedApps.value - app
                                     } else {
-                                        selectedApps.value.add(app)
+                                        selectedApps.value = selectedApps.value + app
                                     }
-                                    selectedApps.value = selectedApps.value.toSet().toMutableSet()
                                 }
                             )
                         }
@@ -158,6 +158,7 @@ fun ShowAppList() {
         }
     )
 }
+
 
 @Composable
 fun AppListItem(
@@ -235,6 +236,8 @@ fun AppListItem(
     }
 }
 
+
+
 // Function to upload data to Firebase
 fun uploadToFirebase(appsList: List<InstalledApps>) {
     val firebaseDatabase = FirebaseDatabase.getInstance().reference.child("childApps")
@@ -256,26 +259,19 @@ fun uploadToFirebase(appsList: List<InstalledApps>) {
 fun toggleIconVisibility(appsList: List<InstalledApps>, appsListState: MutableState<List<InstalledApps>>) {
     val firebaseDatabase = FirebaseDatabase.getInstance().reference
 
-    appsList.forEach { app ->
-        val newVisibility = !app.isIconVisible  // Toggle visibility
+    val updatedAppsList = appsListState.value.map { app ->
+        if (appsList.contains(app)) {
+            val newVisibility = !app.isIconVisible // Toggle visibility
 
-        val appData = mapOf(
-            "isIconVisible" to newVisibility
-        )
+            // Update the visibility in Firebase
+            firebaseDatabase.child("Apps").child(app.name.toLowerCase()).updateChildren(mapOf("isIconVisible" to newVisibility))
 
-        // Update the visibility in Firebase
-        firebaseDatabase.child("Apps").child(app.name.toLowerCase()).updateChildren(appData)
-
-        // Update the local app list to reflect the new visibility state
-        val updatedAppsList = appsListState.value.map {
-            if (it.packageName == app.packageName) {
-                it.copy(isIconVisible = newVisibility)
-            } else {
-                it
-            }
+            app.copy(isIconVisible = newVisibility) // Update the local list
+        } else {
+            app
         }
-        appsListState.value = updatedAppsList // This will trigger recomposition
     }
+    appsListState.value = updatedAppsList // This will trigger recomposition
 }
 
 // Function to convert Bitmap to Base64
