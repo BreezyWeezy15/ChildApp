@@ -4,6 +4,7 @@ import android.util.Base64
 import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -38,6 +40,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -54,6 +57,7 @@ fun ShowAppList() {
     val context = LocalContext.current
     val appsList = remember { mutableStateOf<List<InstalledApps>>(emptyList()) }
     val isLoading = remember { mutableStateOf(true) }
+    val selectedApps = remember { mutableStateOf<MutableSet<InstalledApps>>(mutableSetOf()) }
     val showToast = remember { mutableStateOf(false) }
 
     DisposableEffect(Unit) {
@@ -69,6 +73,7 @@ fun ShowAppList() {
                     val base64Icon = childSnapshot.child("icon").getValue(String::class.java) ?: ""
                     val interval = childSnapshot.child("interval").getValue(String::class.java) ?: ""
                     val pinCode = childSnapshot.child("pin_code").getValue(String::class.java) ?: ""
+                    val isIconVisible = childSnapshot.child("isIconVisible").getValue(Boolean::class.java) ?: false
 
                     val iconBitmap = base64ToBitmap(base64Icon)
 
@@ -77,7 +82,8 @@ fun ShowAppList() {
                         name = name,
                         icon = iconBitmap,
                         interval = interval,
-                        pinCode = pinCode
+                        pinCode = pinCode,
+                        isIconVisible = isIconVisible // Add the fetched value here
                     )
                     updatedList.add(installedApp)
                 }
@@ -123,7 +129,6 @@ fun ShowAppList() {
                     CircularProgressIndicator()
                 } else {
                     if (appsList.value.isEmpty()) {
-                        // Show this text if the list is empty
                         Text(
                             text = "No apps added yet",
                             style = MaterialTheme.typography.bodyLarge,
@@ -141,10 +146,19 @@ fun ShowAppList() {
                                     .fillMaxWidth()
                             ) {
                                 items(appsList.value) { app ->
+                                    val isSelected = selectedApps.value.contains(app)
                                     AppListItem(
                                         app = app,
                                         interval = app.interval,
-                                        pinCode = app.pinCode
+                                        pinCode = app.pinCode,
+                                        isSelected = isSelected,
+                                        onClick = {
+                                            if (isSelected) {
+                                                selectedApps.value.remove(app)
+                                            } else {
+                                                selectedApps.value.add(app)
+                                            }
+                                        }
                                     )
                                 }
                             }
@@ -152,7 +166,9 @@ fun ShowAppList() {
                             // Submit button
                             Button(
                                 onClick = {
-                                    uploadToFirebase(appsList.value)
+                                    // Update isIconVisible to true for selected apps before uploading
+                                    updateIconVisibility(selectedApps.value.toList(), true)
+                                    uploadToFirebase(selectedApps.value.toList())
                                     showToast.value = true
                                 },
                                 modifier = Modifier
@@ -177,15 +193,28 @@ fun ShowAppList() {
     )
 }
 
-
 @Composable
-fun AppListItem(app: InstalledApps, interval: String, pinCode: String) {
+fun AppListItem(
+    app: InstalledApps,
+    interval: String,
+    pinCode: String,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    val borderColor = if (isSelected) {
+        Color.Blue // Border color when selected
+    } else {
+        Color.Transparent // No border when not selected
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp),
+            .padding(12.dp) // Margin around the card
+            .border(2.dp, borderColor, RectangleShape) // Border color based on selection
+            .clickable { onClick() }, // Clickable row
         elevation = CardDefaults.cardElevation(4.dp),
-        shape = RectangleShape // Straight edges for the card
+        shape = RectangleShape
     ) {
         Column(
             modifier = Modifier
@@ -195,15 +224,18 @@ fun AppListItem(app: InstalledApps, interval: String, pinCode: String) {
             Row(
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Image(
-                    bitmap = app.icon.asImageBitmap(),
-                    contentDescription = app.name,
-                    modifier = Modifier
-                        .size(64.dp)
-                        .clip(CircleShape) // Make the icon circular
-                        .border(2.dp, MaterialTheme.colorScheme.primary, CircleShape) // Add a border
-                )
-                Spacer(modifier = Modifier.width(16.dp))
+                // Check if the icon is visible
+                if (!app.isIconVisible) { // Show the icon when isIconVisible is false
+                    Image(
+                        bitmap = app.icon.asImageBitmap(),
+                        contentDescription = app.name,
+                        modifier = Modifier
+                            .size(64.dp)
+                            .clip(CircleShape)
+                            .border(2.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                }
                 Text(
                     text = app.name,
                     style = MaterialTheme.typography.bodyLarge,
@@ -234,32 +266,57 @@ fun AppListItem(app: InstalledApps, interval: String, pinCode: String) {
     }
 }
 
+
 data class InstalledApps(
     val packageName: String,
     val name: String,
     val icon: Bitmap,
     val interval: String,
-    val pinCode: String
-)
+    val pinCode: String,
+    val isIconVisible: Boolean // Added this property
+) {
+    override fun equals(other: Any?): Boolean {
+        return other is InstalledApps && this.packageName == other.packageName
+    }
 
+    override fun hashCode(): Int {
+        return packageName.hashCode()
+    }
+}
 
 fun base64ToBitmap(base64Str: String): Bitmap {
     val decodedBytes = Base64.decode(base64Str, Base64.DEFAULT)
     return BitmapFactory.decodeByteArray(decodedBytes, 0, decodedBytes.size)
 }
 
+// Function to upload data to Firebase
 fun uploadToFirebase(appsList: List<InstalledApps>) {
-    val firebaseDatabase = FirebaseDatabase.getInstance().reference.child("childApp")
+    val firebaseDatabase = FirebaseDatabase.getInstance().reference.child("childApps") // Change to the correct path
 
     appsList.forEach { app ->
         val appData = mapOf(
             "package_name" to app.packageName,
             "icon" to bitmapToBase64(app.icon),
             "interval" to app.interval,
-            "pin_code" to app.pinCode
+            "pin_code" to app.pinCode,
+            "isIconVisible" to app.isIconVisible // Ensure this is included in the upload
         )
 
-        firebaseDatabase.child(app.name).setValue(appData)
+        firebaseDatabase.child(app.name).setValue(appData) // Updated to use packageName
+    }
+}
+
+// Function to update isIconVisible for selected apps
+fun updateIconVisibility(appsList: List<InstalledApps>, isVisible: Boolean) {
+    val firebaseDatabase = FirebaseDatabase.getInstance().reference
+
+    appsList.forEach { app ->
+        val appData = mapOf(
+            "isIconVisible" to isVisible
+        )
+
+        // Navigate to the correct path: app.name/Apps and update the visibility
+        firebaseDatabase.child("Apps").child(app.name.toLowerCase()).updateChildren(appData)
     }
 }
 
