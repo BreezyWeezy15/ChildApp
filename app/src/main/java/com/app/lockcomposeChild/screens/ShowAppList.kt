@@ -127,70 +127,60 @@ fun ShowAppList() {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(paddingValues),
-                contentAlignment = Alignment.Center
+                    .padding(paddingValues)
             ) {
-                if (isLoading.value) {
-                    CircularProgressIndicator()
-                } else {
-                    if (appsList.value.isEmpty()) {
-                        Text(
-                            text = "No apps added yet",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = if (isSystemInDarkTheme()) Color.White else Color.Black,
-                            modifier = Modifier.align(Alignment.Center)
-                        )
-                    } else {
-                        Column(
-                            modifier = Modifier.fillMaxSize()
-                        ) {
-                            // List of apps
-                            LazyColumn(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .fillMaxWidth()
-                            ) {
-                                items(appsList.value) { app ->
-                                    val isSelected = selectedApps.value.contains(app)
-                                    AppListItem(
-                                        app = app,
-                                        interval = app.interval,
-                                        pinCode = app.pinCode,
-                                        isSelected = isSelected,
-                                        onClick = {
-                                            if (isSelected) {
-                                                selectedApps.value.remove(app)
-                                            } else {
-                                                selectedApps.value.add(app)
-                                            }
-                                        }
-                                    )
-                                }
-                            }
-
-                            // Submit button
-                            Button(
+                Column(
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    // List of apps
+                    LazyColumn(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                    ) {
+                        items(appsList.value) { app ->
+                            val isSelected = selectedApps.value.contains(app)
+                            AppListItem(
+                                app = app,
+                                interval = app.interval,
+                                pinCode = app.pinCode,
+                                isSelected = isSelected,
                                 onClick = {
-                                    // Toggle visibility for selected apps before uploading
-                                    toggleIconVisibility(selectedApps.value.toList())
-                                    uploadToFirebase(selectedApps.value.toList())
-                                    showToast.value = true
-                                },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(60.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(0xFF3F51B5)
-                                ),
-                                shape = RectangleShape
-                            ) {
-                                Text(
-                                    text = "Submit",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = Color.White
-                                )
-                            }
+                                    // Update the selected apps state
+                                    if (isSelected) {
+                                        selectedApps.value.remove(app)
+                                    } else {
+                                        selectedApps.value.add(app)
+                                    }
+                                    // Trigger recomposition for the selected item
+                                    selectedApps.value = selectedApps.value.toSet().toMutableSet()
+                                }
+                            )
                         }
+                    }
+
+                    // Fixed position button
+                    Button(
+                        onClick = {
+                            // Toggle visibility for selected apps before uploading
+                            toggleIconVisibility(selectedApps.value.toList())
+                            uploadToFirebase(selectedApps.value.toList())
+                            showToast.value = true
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(65.dp) // Set the height to 65 dp
+                            .padding(12.dp), // Add padding around the button
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF3F51B5)
+                        ),
+                        shape = RectangleShape
+                    ) {
+                        Text(
+                            text = "Submit",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = Color.White
+                        )
                     }
                 }
             }
@@ -273,6 +263,8 @@ fun AppListItem(
         }
     }
 }
+
+
 
 // Function to upload data to Firebase
 fun uploadToFirebase(appsList: List<InstalledApps>) {
